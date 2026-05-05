@@ -1,17 +1,27 @@
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 from database import db
+from models import ContributorList, ContributorDetail, EventList, StatusHistoryList, MonthlyActivityList
 
 router = APIRouter(prefix="/contributors", tags=["contributors"])
 
 
-@router.get("")
+@router.get(
+    "",
+    summary="List all contributors",
+    description=(
+        "Returns contributor lifecycle records across all repos. "
+        "Filter by `repo`, `is_core`, and/or `is_newcomer`. "
+        "Sorted by total event count descending."
+    ),
+    response_model=ContributorList,
+)
 def list_contributors(
-    repo: Optional[str] = None,
-    is_core: Optional[bool] = None,
-    is_newcomer: Optional[bool] = None,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    repo: Optional[str] = Query(None, description="Filter to a specific repository slug"),
+    is_core: Optional[bool] = Query(None, description="Filter to core contributors only"),
+    is_newcomer: Optional[bool] = Query(None, description="Filter to newcomers only"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(50, ge=1, le=200, description="Results per page (max 200)"),
 ):
     offset = (page - 1) * per_page
     filters = []
@@ -51,8 +61,19 @@ def list_contributors(
     }
 
 
-@router.get("/{username}")
-def get_contributor(username: str, repo: Optional[str] = None):
+@router.get(
+    "/{username}",
+    summary="Get a contributor's profile",
+    description=(
+        "Returns lifecycle records for the given GitHub username across all repos they appear in. "
+        "Optionally scope to a single `repo`."
+    ),
+    response_model=ContributorDetail,
+)
+def get_contributor(
+    username: str,
+    repo: Optional[str] = Query(None, description="Scope to a specific repository slug"),
+):
     filters = ["user_login = ?"]
     params: list = [username]
 
@@ -74,13 +95,23 @@ def get_contributor(username: str, repo: Optional[str] = None):
     return {"username": username, "repos": [dict(r) for r in rows]}
 
 
-@router.get("/{username}/events")
+@router.get(
+    "/{username}/events",
+    summary="Get events for a contributor",
+    description=(
+        "Returns raw timestamped events (commits, issues, PRs) for the given username. "
+        "Filter by `repo` and/or `event_type` (one of: issues, prs, commits)."
+    ),
+    response_model=EventList,
+)
 def get_contributor_events(
     username: str,
-    repo: Optional[str] = None,
-    event_type: Optional[str] = None,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(100, ge=1, le=500),
+    repo: Optional[str] = Query(None, description="Filter to a specific repository slug"),
+    event_type: Optional[str] = Query(
+        None, description="Filter by event type. One of: issues, prs, commits"
+    ),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(100, ge=1, le=500, description="Results per page (max 500)"),
 ):
     offset = (page - 1) * per_page
     filters = ["username = ?"]
@@ -117,13 +148,24 @@ def get_contributor_events(
     }
 
 
-@router.get("/{username}/status-history")
+@router.get(
+    "/{username}/status-history",
+    summary="Get status history for a contributor",
+    description=(
+        "Returns the month-by-month contributor status (active, at-risk, disengaged, returning) "
+        "for the given username. Filter by `repo` and/or `status`."
+    ),
+    response_model=StatusHistoryList,
+)
 def get_contributor_status_history(
     username: str,
-    repo: Optional[str] = None,
-    status: Optional[str] = None,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(100, ge=1, le=500),
+    repo: Optional[str] = Query(None, description="Filter to a specific repository slug"),
+    status: Optional[str] = Query(
+        None,
+        description="Filter by status. One of: active, at-risk, disengaged, returning",
+    ),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(100, ge=1, le=500, description="Results per page (max 500)"),
 ):
     offset = (page - 1) * per_page
     filters = ["user_login = ?"]
@@ -160,12 +202,20 @@ def get_contributor_status_history(
     }
 
 
-@router.get("/{username}/monthly-activity")
+@router.get(
+    "/{username}/monthly-activity",
+    summary="Get monthly activity for a contributor",
+    description=(
+        "Returns per-month activity counts (commits, issues, PRs, etc.) "
+        "for the given username. Optionally scope to a single `repo`."
+    ),
+    response_model=MonthlyActivityList,
+)
 def get_contributor_monthly_activity(
     username: str,
-    repo: Optional[str] = None,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(100, ge=1, le=500),
+    repo: Optional[str] = Query(None, description="Filter to a specific repository slug"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(100, ge=1, le=500, description="Results per page (max 500)"),
 ):
     offset = (page - 1) * per_page
     filters = ["user_login = ?"]

@@ -1,14 +1,23 @@
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 from database import db
+from models import RepoList, PRList, PR, ContributorList, MonthlyActivityList, StatusHistoryList
 
 router = APIRouter(prefix="/repos", tags=["repos"])
 
 
-@router.get("")
+@router.get(
+    "",
+    summary="List all repositories",
+    description=(
+        "Returns one row per repository with aggregated PR statistics: "
+        "total PRs, merged count, average comment count, and average time-to-decision."
+    ),
+    response_model=RepoList,
+)
 def list_repos(
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(50, ge=1, le=200, description="Results per page (max 200)"),
 ):
     offset = (page - 1) * per_page
     with db() as conn:
@@ -35,13 +44,22 @@ def list_repos(
     }
 
 
-@router.get("/{repo:path}/prs")
+@router.get(
+    "/{repo:path}/prs",
+    summary="List PRs for a repository",
+    description=(
+        "Returns pull requests for the given repo. "
+        "Filter by `author` (GitHub username) and/or `merged` (true/false). "
+        "Repo names with slashes must be URL-encoded (e.g. `huggingface%2Ftransformers`)."
+    ),
+    response_model=PRList,
+)
 def list_prs(
     repo: str,
-    author: Optional[str] = None,
-    merged: Optional[bool] = None,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    author: Optional[str] = Query(None, description="Filter by PR author username"),
+    merged: Optional[bool] = Query(None, description="Filter by merge status"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(50, ge=1, le=200, description="Results per page (max 200)"),
 ):
     offset = (page - 1) * per_page
     filters = ["repo = ?"]
@@ -78,7 +96,12 @@ def list_prs(
     }
 
 
-@router.get("/{repo:path}/prs/{pr_number}")
+@router.get(
+    "/{repo:path}/prs/{pr_number}",
+    summary="Get a single PR",
+    description="Returns the full PR record for the given repo and PR number.",
+    response_model=PR,
+)
 def get_pr(repo: str, pr_number: int):
     with db() as conn:
         row = conn.execute(
@@ -90,13 +113,21 @@ def get_pr(repo: str, pr_number: int):
     return dict(row)
 
 
-@router.get("/{repo:path}/contributors")
+@router.get(
+    "/{repo:path}/contributors",
+    summary="List contributors for a repository",
+    description=(
+        "Returns contributor lifecycle records for the given repo. "
+        "Filter by `is_core` or `is_newcomer` to narrow to a classification tier."
+    ),
+    response_model=ContributorList,
+)
 def list_repo_contributors(
     repo: str,
-    is_core: Optional[bool] = None,
-    is_newcomer: Optional[bool] = None,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    is_core: Optional[bool] = Query(None, description="Filter to core contributors only"),
+    is_newcomer: Optional[bool] = Query(None, description="Filter to newcomers only"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(50, ge=1, le=200, description="Results per page (max 200)"),
 ):
     offset = (page - 1) * per_page
     filters = ["repo = ?"]
@@ -133,12 +164,20 @@ def list_repo_contributors(
     }
 
 
-@router.get("/{repo:path}/monthly-activity")
+@router.get(
+    "/{repo:path}/monthly-activity",
+    summary="Monthly activity for a repository",
+    description=(
+        "Returns per-user monthly activity counts (commits, issues, PRs, etc.) "
+        "for the given repo. Optionally filter to a single `user_login`."
+    ),
+    response_model=MonthlyActivityList,
+)
 def repo_monthly_activity(
     repo: str,
-    user_login: Optional[str] = None,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(100, ge=1, le=500),
+    user_login: Optional[str] = Query(None, description="Filter to a specific GitHub username"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(100, ge=1, le=500, description="Results per page (max 500)"),
 ):
     offset = (page - 1) * per_page
     filters = ["repo = ?"]
@@ -172,13 +211,24 @@ def repo_monthly_activity(
     }
 
 
-@router.get("/{repo:path}/status-history")
+@router.get(
+    "/{repo:path}/status-history",
+    summary="Contributor status history for a repository",
+    description=(
+        "Returns the month-by-month contributor status (active, at-risk, disengaged, returning) "
+        "for all users in the given repo. Filter by `user_login` and/or `status`."
+    ),
+    response_model=StatusHistoryList,
+)
 def repo_status_history(
     repo: str,
-    user_login: Optional[str] = None,
-    status: Optional[str] = None,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(100, ge=1, le=500),
+    user_login: Optional[str] = Query(None, description="Filter to a specific GitHub username"),
+    status: Optional[str] = Query(
+        None,
+        description="Filter by status. One of: active, at-risk, disengaged, returning",
+    ),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(100, ge=1, le=500, description="Results per page (max 500)"),
 ):
     offset = (page - 1) * per_page
     filters = ["repo = ?"]
